@@ -73,8 +73,16 @@ const xlsx = require('xlsx');
 const mysql = require('mysql2');
 const express = require('express');
 const bodyParser = require('body-parser');
+const {engine} = require('express-handlebars');
 
 const app = express();
+
+app.engine('handlebars', engine());
+app.set('view engine', 'handlebars');
+app.set('views', './views');
+// app.use(express.json());
+// app.use(express.urlencoded({ extended: true }));
+// app.use(express.static('public'));
 
 
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -96,24 +104,11 @@ connection.connect(err => {
   fetchData()
 });
 
-
-// app.post('/user', (req, res) => {
-
-//   const { name, email, mobile } = req.body;
-//   if (!name || !email || !mobile) {
-//     return res.status(400).send('name, email और mobile फ़ील्ड अनिवार्य हैं');
-//   }
+app.get('/', (req, res) => {
+  res.render('home');
+});
 
 
-//   const sql = 'INSERT INTO user (name, email, mobile) VALUES (?, ?, ?)';
-//   connection.query(sql, [name, email, mobile], (err, results) => {
-//     if (err) {
-//       console.error('क्वेरी निष्पादित करते समय त्रुटि:', err);
-//       return res.status(500).send('डेटाबेस त्रुटि');
-//     }
-//     res.send(`User ${name} inserted successfully`);
-//   });
-// });
 
 app.post('/user', (req, res) => {
   const { name, email, mobile } = req.body;
@@ -129,7 +124,6 @@ app.post('/user', (req, res) => {
     return res.status(400).send('Invalid email address');
   }
 
-  // Validate mobile number format (example: 10 digits)
   const mobileRegex = /^[0-9]{10}$/;
   if (!mobileRegex.test(mobile)) {
     return res.status(400).send('Invalid mobile number');
@@ -216,9 +210,6 @@ function convertToExcel(user, tasks) {
   xlsx.writeFile(wb, 'data.xlsx');
   console.log('Excel file created successfully');
 }
-
-
-
 
 
 app.listen(5001, () => {
