@@ -3,7 +3,7 @@ const mysql = require ("../config/database.js")
 
 const UserInsert= async(req,res)=>{
   try {
-      const q="INSERT INTO `task`.`user` ( `name`, `email`, `mobile`) VALUES (?)";
+      const q="INSERT INTO `menegone`.`user` ( `name`, `email`, `mobile`) VALUES (?)";
       const values=[
           req.body.name,
           req.body.email,
