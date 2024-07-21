@@ -74,12 +74,18 @@ const mysql = require('mysql2');
 const express = require('express');
 const bodyParser = require('body-parser');
 const {engine} = require('express-handlebars');
+const path = require("path")
 
 const app = express();
 
-app.engine('handlebars', engine());
+app.engine('handlebars', engine({
+  defaultLayout: 'main',
+  partialsDir: path.join(__dirname, 'views/partials')
+}));
 app.set('view engine', 'handlebars');
 app.set('views', './views');
+
+
 // app.use(express.json());
 // app.use(express.urlencoded({ extended: true }));
 // app.use(express.static('public'));
@@ -110,15 +116,27 @@ app.get('/', (req, res) => {
 
 
 
-app.post('/user', (req, res) => {
+app.get('/userinsert', (req, res) => {
+  res.render('userinsert', { title: 'Insert User' });
+});
+
+app.get('/userdisplay', (req, res) => {
+  const sql = 'SELECT * FROM user';
+  connection.query(sql, (err, results) => {
+    if (err) {
+      console.error("error", err);
+      return res.status(500).send('Database error');
+    }
+    res.render('userdisplay', { title: 'Display Users', users: results });
+  });
+});
+app.post('/users/insert', (req, res) => {
   const { name, email, mobile } = req.body;
 
-  // Validate required fields
   if (!name || !email || !mobile) {
     return res.status(400).send('Name, email, and mobile fields are required');
   }
 
-  // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     return res.status(400).send('Invalid email address');
@@ -129,7 +147,6 @@ app.post('/user', (req, res) => {
     return res.status(400).send('Invalid mobile number');
   }
 
-  // Insert into the database
   const sql = 'INSERT INTO user (name, email, mobile) VALUES (?, ?, ?)';
   connection.query(sql, [name, email, mobile], (err, results) => {
     if (err) {
@@ -140,74 +157,114 @@ app.post('/user', (req, res) => {
   });
 });
 
-app.get("/find",(req,res)=>{
-  const sql = 'SELECT * FROM user';
-  connection.query(sql, (err, results) => {
+
+app.get('/taskinsert', (req, res) => {
+  const userQuery = 'SELECT name FROM user';
+  connection.query(userQuery, (err, results) => {
     if (err) {
-      console.error("error",err)
-      return res.status(500).send('डेटाबेस त्रुटि');
+      console.error('Error fetching users:', err);
+      return res.status(500).send('Database error');
+    }
+
+    // Map user names to an array for Handlebars
+    const users = results.map(user => ({ name: user.name }));
+    res.render('taskinsert', { title: 'Insert Task', users });
+  });
+});
+app.post('/tasks/insert', async (req, res) => {
+  try {
+    const { name, task, status } = req.body;
+    if (!name || !task || !status) {
+      return res.status(400).json({ error: 'Name, task, and status fields are required' });
+    }
+    const validStatuses = ['Pending', 'In Progress', 'Complete'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid task status' });
+    }
+    const userQuery = 'SELECT name FROM user WHERE name = ?';
+    connection.query(userQuery, [name], (err, results) => {
+      if (err) {
+        console.error('Error checking user:', err);
+        return res.status(500).json({ error: 'Failed to check user' });
       }
-      res.send(results);
+      if (results.length === 0) {
+        return res.status(400).json({ error: 'User does not exist' });
+      }
+      const q = "INSERT INTO demo (name, task, status) VALUES (?, ?, ?)";
+      const values = [name, task, status];
+
+      connection.query(q, values, (err, results) => {
+        if (err) {
+          console.error('Error inserting task:', err);
+          return res.status(500).json({ error: 'Failed to insert task' });
+        }
+        return res.status(201).json({ message: 'Task has been created successfully' });
       });
-})
+    });
 
-
-app.post('/task', (req, res) => {
-  const { task_name, username, task_status } = req.body;
-  if (!task_name || !username || !task_status) {
-    return res.status(400).send('task_name, username, and task_status fields are required');
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return res.status(500).json({ error: 'An unexpected error occurred' });
   }
-
-  const sql = 'INSERT INTO tasks (task_name, username, task_status) VALUES (?, ?, ?)';
-  connection.query(sql, [task_name, username, task_status], (err, results) => {
-    if (err) {
-      console.error('Error executing query:', err);
-      return res.status(500).send('Database error');
-    }
-    res.send(`Task '${task_name}' for user '${username}' with status '${task_status}' inserted successfully`);
-  });
 });
 
-
-app.get('/tasks/find', (req, res) => {
-  const sql = 'SELECT * FROM tasks';
+app.get('/taskdisplay', (req, res) => {
+  const sql = 'SELECT * FROM demo';
+  
   connection.query(sql, (err, results) => {
     if (err) {
-      console.error('Error executing query:', err);
+      console.error('Error fetching tasks:', err);
       return res.status(500).send('Database error');
     }
-    res.json(results);
+    
+    res.render('taskdisplay', { title: 'Display Tasks', tasks: results });
   });
 });
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+app.get('/export', (req, res) => {
+  fetchData(res);
+});
 
 function fetchData() {
-  connection.query('SELECT * FROM user', (err, user) => {
+  connection.query('SELECT * FROM user', (err, User) => {
     if (err) {
       console.error('Error fetching user data:', err);
       return;
     }
-    connection.query('SELECT * FROM tasks', (err, tasks) => {
+    connection.query('SELECT * FROM demo', (err, Tasks) => {
       if (err) {
         console.error('Error fetching task data:', err);
         return;
       }
-      convertToExcel(user, tasks);
+      convertToExcel(User, Tasks);
     });
   });
 }
-function convertToExcel(user, tasks) {
+function convertToExcel(User, Tasks) {
   const wb = xlsx.utils.book_new();
-  const userSheet = xlsx.utils.json_to_sheet(user);
-  const taskSheet = xlsx.utils.json_to_sheet(tasks);
+  const userSheet = xlsx.utils.json_to_sheet(User);
+  const taskSheet = xlsx.utils.json_to_sheet(Tasks);
 
   xlsx.utils.book_append_sheet(wb, userSheet, 'User');
   xlsx.utils.book_append_sheet(wb, taskSheet, 'Tasks');
 
 
-  xlsx.writeFile(wb, 'data.xlsx');
+  xlsx.writeFile(wb, 'hacker.xlsx');
   console.log('Excel file created successfully');
 }
 
@@ -220,4 +277,16 @@ app.listen(5001, () => {
 
 
 
+
+
+
+
+
+// CREATE TABLE demo (
+//   id INT AUTO_INCREMENT PRIMARY KEY,
+//   name VARCHAR(255) NOT NULL,
+//   task VARCHAR(255) NOT NULL,
+//   status ENUM('Pending', 'In Progress', 'Complete') NOT NULL,
+//   FOREIGN KEY (name) REFERENCES user(name)
+// );
 
